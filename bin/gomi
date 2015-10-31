@@ -1,0 +1,140 @@
+#!/bin/zsh
+
+if [[ -z $ZSH_VERSION ]]; then
+    echo "zsh" >&2
+    exit 1
+fi
+
+: ${GOMI_DIR:=~/.gomi}
+GOMI_BOX="$GOMI_DIR/$(date +%Y/%m/%d)"
+GOMI_LOG="$GOMI_DIR/log"
+
+gomi::refresh()
+{
+    local -a arr
+    arr=(${(f)"$(<$GOMI_LOG)"})
+
+    local i
+    for ((i=1; i<=$#arr; i++)); do
+        if [[ -e "$(awk '{print $4}' <<<"${arr[i]}")" ]]; then
+            echo "${arr[i]}"
+        fi
+    done >"$GOMI_LOG"
+}
+
+gomi::restore()
+{
+    local -a arr
+    arr=(${(f)"$(<$GOMI_LOG)"})
+
+    if (( $+commands[pygmentize] && $+commands[python] )); then
+        local get_styles styles style lessopen_query
+        get_styles="from pygments.styles import get_all_styles
+        styles = list(get_all_styles())
+        print('\n'.join(styles))"
+        styles=($(sed -e 's/^  *//g' <<<"$get_styles" | python))
+        style=${${(M)styles:#solarized}:-default}
+        # for subshell
+        lessopen_query="| pygmentize -O style=$style -f console256 -g 2>/dev/null %s"
+    fi
+    LESS='-R -f -i -P ?f%f:(stdin). ?lb%lb?L/%L.. [?eEOF:?pb%pb\%..]'
+
+    local out q k res d
+    while out=$(
+        for ((i=1; i<=$#arr; i++)); do
+            if [[ -d $(awk '{print $4}' <<<$arr[i]) ]]; then
+                awk '{print $1,$2,$3}' <<<$arr[i] \
+                    | perl -pe 's/^([0-9]{4}-[0-9]{2}-[0-9]{2}) ([0-9]{2}:[0-9]{2}:[0-9]{2}) (\/.*)$/$1 $2 \033[34m$3\033[m/'
+            else
+                awk '{print $1,$2,$3}' <<<$arr[i]
+            fi
+        done \
+            | fzf --ansi --multi --no-sort --tac --query="$q" \
+            --print-query --expect=ctrl-v --exit-0); do
+        q="$(head -1 <<< "$out")"
+        k="$(head -2 <<< "$out" | tail -1)"
+        res="$(sed '1,2d;/^$/d' <<< "$out")"
+        [ -z "$res" ] && continue
+        if [ "$k" = "ctrl-v" ]; then
+            d="$(awk '{print $4}' <<<${(M)arr:#$res*})"
+            if [[ -d $d ]]; then
+                less "$d"
+            else
+                LESSOPEN="$lessopen_query" less "$d"
+            fi
+        else
+            res=(${(f)res})
+            for ((i=1; i<=$#res; i++)); do
+                grep "${res[i]}" <<<"${(F)arr}" | awk '{print $4,$3}' | xargs mv -f
+            done; exit
+        fi
+    done
+}
+
+gomi::delete()
+{
+    if [[ ! -d $GOMI_BOX ]]; then
+        mkdir -p "$GOMI_BOX"
+    fi
+
+    local f t ret=0
+    for f in "$@"
+    do
+        if [[ -e $f ]]; then
+            t="$GOMI_BOX/${f:t}.$(date '+%H_%M_%S')"
+            command mv "$f" "$t"
+            if [[ $status -eq 0 ]]; then
+                echo "${f:A} $t"
+            else
+                echo "$f: could not move to $GOMI_BOX" >&2
+                ret=1
+            fi
+        else
+            echo "$f: not exist" >&2
+            ret=1
+        fi
+    done
+
+    return $ret
+}
+
+gomi::logging()
+{
+    touch "$GOMI_LOG"
+    local line
+    while read line
+    do
+        echo "$(date '+%Y-%m-%d') $(date '+%H:%M:%S') $line"
+    done >>"$GOMI_LOG"
+}
+
+case "$1" in
+    -h|--help)
+        cat <<HELP >&2
+usage: gomi [OPTIONS] files...
+  gomi delete files like rm command
+  but unlike rm, files are moved to trash box
+
+options:
+  -h, --help     show this help message
+  -r, --restore  restore discarded files
+  -s, --system   remove files to system trash box
+HELP
+        exit 1
+        ;;
+    -r|--restore)
+        gomi::refresh
+        gomi::restore; exit $status
+        ;;
+    -s|--system)
+        exit
+        ;;
+    -*|--**)
+        echo "$1: unknown option" >&2
+        exit 1
+        ;;
+    *)
+        gomi::delete "$@" | gomi::logging
+        exit $status
+        ;;
+esac
