@@ -11,6 +11,13 @@ GOMI_DIR=${GOMI_DIR:-~/.gomi}
 GOMI_BOX="$GOMI_DIR/$(date +%Y/%m/%d)"
 GOMI_LOG="$GOMI_DIR/log"
 
+gomi::init()
+{
+    [[ -d $GOMI_DIR ]] || mkdir -p "$GOMI_DIR"
+    [[ -f $GOMI_LOG ]] || touch "$GOMI_LOG"
+    [[ -d $GOMI_BOX ]] || mkdir -p "$GOMI_BOX"
+}
+
 gomi::system()
 {
     local -a files
@@ -86,6 +93,11 @@ gomi::restore()
     done
     )"
 
+    if [[ -z $list ]]; then
+        echo "gomi: $GOMI_LOG: Is empty" >&2
+        return 1
+    fi
+
     # fzf loop
     local out q k res
     while out=$(
@@ -126,12 +138,8 @@ gomi::restore()
 
 gomi::delete()
 {
-    if [[ ! -d $GOMI_BOX ]]; then
-        mkdir -p "$GOMI_BOX"
-    fi
-
     if [[ -z $1 ]]; then
-        echo "too few arguments" >&2
+        echo "gomi: too few arguments" >&2
         return 1
     fi
 
@@ -158,7 +166,6 @@ gomi::delete()
 
 gomi::logging()
 {
-    touch "$GOMI_LOG"
     local line
     while read line
     do
@@ -166,6 +173,7 @@ gomi::logging()
     done >>"$GOMI_LOG"
 }
 
+gomi::init
 case "$1" in
     -h|--help)
         cat <<HELP >&2
