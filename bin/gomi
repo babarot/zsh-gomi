@@ -5,6 +5,8 @@ if [[ -z $ZSH_VERSION ]]; then
     exit 1
 fi
 
+del=$'\t'
+
 GOMI_DIR=${GOMI_DIR:-~/.gomi}
 GOMI_BOX="$GOMI_DIR/$(date +%Y/%m/%d)"
 GOMI_LOG="$GOMI_DIR/log"
@@ -42,14 +44,15 @@ gomi::system()
 EOF
     for i in "${files[@]}"
     do
-        echo "${i:A} $HOME/.Trash/${i:t}"
+        echo "${i:A}$del$HOME/.Trash/${i:t}"
     done | gomi::logging
 }
 
 gomi::restore()
 {
     local -a arr
-    arr=(${(f)"$(<$GOMI_LOG)"})
+    arr=(${(@f)"$(<$GOMI_LOG)"})
+    #arr=${(M)${(R)${(@f)"$(<$GOMI_LOG)"}##*[[:blank:]]}:#/*[[:digit:]]}
     if (( $+commands[pygmentize] && $+commands[python] )); then
         local get_styles styles style lessopen_query
         get_styles="from pygments.styles import get_all_styles
@@ -66,10 +69,16 @@ gomi::restore()
     local list i tmp
     list="$(
     for ((i=1; i<=$#arr; i++)); do
-        tmp=(${(s: :)arr[i]})
+        #tmp=("${(@s/\t/)arr[i]}")
+        #tmp=("${(s/\t/)arr[i]}")
+        #tmp=("${(ps:\t:)arr[i]}")
+        tmp=("${(pws:\x09:)arr[i]}")
+        #echo "${tmp[1]} ${tmp[2]} ${tmp[3]} ${tmp[4]}"
         if [[ -e ${tmp[4]} ]]; then
             if [[ -d ${tmp[4]} ]]; then
                 echo -e "${tmp[1]} ${tmp[2]} \033[34m${tmp[3]}\033[m"
+            elif [[ -f ${tmp[4]} && -x ${tmp[4]} ]]; then
+                echo -e "${tmp[1]} ${tmp[2]} ${tmp[3]:h}/\033[31m${tmp[3]:t}\033[m"
             else
                 echo "${tmp[1]} ${tmp[2]} ${tmp[3]}"
             fi
@@ -78,7 +87,7 @@ gomi::restore()
     )"
 
     # fzf loop
-    local out q k res d
+    local out q k res
     while out=$(
         echo "$list" \
             | fzf --ansi --multi --no-sort --tac --query="$q" \
@@ -87,23 +96,30 @@ gomi::restore()
         k="$(head -2 <<< "$out" | tail -1)"
         res="$(sed '1,2d;/^$/d' <<< "$out")"
         [ -z "$res" ] && continue
+        #echo "${(M)res##*[0-9] }"
+        #echo "${${(M)res##*[0-9] }// /$del}${res##*[0-9] }"
+        #echo ${(M)arr:#${${(M)res##*[0-9] }// /$del}${res##*[0-9] }*}
+        #echo ${(pws:\x09:)${(M)arr:#${${(M)res##*[0-9] }// /$del}${res##*[0-9] }*}}
+        tmp=(${(pws:\x09:)${(M)arr:#${${(M)res##*[0-9] }// /$del}${res##*[0-9] }*}})
         if [ "$k" = "ctrl-v" ]; then
             # quicklook view
-            d="$(awk '{print $4}' <<<${(M)arr:#$res*})"
-            if [[ -d $d ]]; then
+            #d="$(awk '{print $4}' <<<${(M)arr:#${${(M)res##*[0-9] }// /$del}${res##*[0-9] }*})"
+            if [[ -d ${tmp[4]} ]]; then
                 {
-                    ls -dl "$d"
-                    ls -l "$d"
+                    ls -dl \"${tmp[4]}\"
+                    ls -l \"${tmp[4]}\"
                 } | less
             else
-                LESSOPEN="$lessopen_query" less "$d"
+                LESSOPEN="$lessopen_query" less "${tmp[4]}"
             fi
         else
             # restore multiple selected files by fzf
-            res=(${(f)res})
-            for ((i=1; i<=$#res; i++)); do
-                grep "${res[i]}" <<<"${(F)arr}" | awk '{print $4,$3}' | xargs mv -f
-            done; exit
+            #res=(${(f)res})
+            #for ((i=1; i<=$#res; i++)); do
+            #    grep "${res[i]}" <<<"${(F)arr}" | awk '{print $4,$3}' | xargs mv -f
+            #done; exit
+            command mv -f "${tmp[4]}" "${1:-${tmp[3]}}"
+            return $status
         fi
     done
 }
@@ -126,7 +142,7 @@ gomi::delete()
             t="$GOMI_BOX/${f:t}.$(date '+%H_%M_%S')"
             command mv -f "$f" "$t" 2>/dev/null
             if [[ $status -eq 0 ]]; then
-                echo "${f:A} $t"
+                echo "${f:A}$del$t" | gomi::logging
             else
                 echo "$f: could not move to $GOMI_BOX" >&2
                 ret=1
@@ -146,7 +162,7 @@ gomi::logging()
     local line
     while read line
     do
-        echo "$(date '+%Y-%m-%d') $(date '+%H:%M:%S') $line"
+        [[ -n $line ]] && echo "$(date '+%Y-%m-%d')$del$(date '+%H:%M:%S')$del$line"
     done >>"$GOMI_LOG"
 }
 
@@ -165,19 +181,16 @@ HELP
         exit 1
         ;;
     -r|--restore)
-        gomi::restore; exit $status
+        shift; gomi::restore "$@"
         ;;
     -s|--system)
-        shift
-        gomi::system "$@"
-        exit $status
+        shift; gomi::system "$@"
         ;;
     -*|--**)
         echo "$1: unknown option" >&2
         exit 1
         ;;
     *)
-        gomi::delete "$@" | gomi::logging
-        exit $status
+        gomi::delete "$@"
         ;;
 esac
