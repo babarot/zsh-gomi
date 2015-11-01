@@ -5,9 +5,46 @@ if [[ -z $ZSH_VERSION ]]; then
     exit 1
 fi
 
-: ${GOMI_DIR:=~/.gomi}
+GOMI_DIR=${GOMI_DIR:-~/.gomi}
 GOMI_BOX="$GOMI_DIR/$(date +%Y/%m/%d)"
 GOMI_LOG="$GOMI_DIR/log"
+
+gomi::system()
+{
+    local -a files
+    local i CWD
+
+    for i in "$@"
+    do
+        if [[ ! -e $i ]]; then
+            echo "$i: no such file or directory" >&2
+            return 1
+        fi
+        files+=("$i")
+    done
+
+    CWD="$(pwd | sed -E -e 's/\\\\/\\\\\\\\/g' -e 's/"/\\\\"/g')"
+    osascript - "${files[@]}" <<EOF >/dev/null
+    on run argv
+        set itemArray to {}
+
+        repeat with i in argv
+            if first character of i is not "/" then
+                set i to "$CWD" & "/" & i
+            end if
+            set itemArray to itemArray & (i as POSIX file as Unicode text)
+        end repeat
+
+        tell application "Finder"
+            delete itemArray
+        end tell
+    end run
+EOF
+    for i in "${files[@]}"
+    do
+        echo "${i:A} $HOME/.Trash/${i:t}"
+    done | gomi::logging
+}
 
 gomi::restore()
 {
@@ -77,6 +114,11 @@ gomi::delete()
         mkdir -p "$GOMI_BOX"
     fi
 
+    if [[ -z $1 ]]; then
+        echo "too few arguments" >&2
+        return 1
+    fi
+
     local f t ret=0
     for f in "$@"
     do
@@ -126,7 +168,9 @@ HELP
         gomi::restore; exit $status
         ;;
     -s|--system)
-        exit
+        shift
+        gomi::system "$@"
+        exit $status
         ;;
     -*|--**)
         echo "$1: unknown option" >&2
