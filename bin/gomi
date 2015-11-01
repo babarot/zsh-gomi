@@ -76,11 +76,7 @@ gomi::restore()
     local list i tmp
     list="$(
     for ((i=1; i<=$#arr; i++)); do
-        #tmp=("${(@s/\t/)arr[i]}")
-        #tmp=("${(s/\t/)arr[i]}")
-        #tmp=("${(ps:\t:)arr[i]}")
         tmp=("${(pws:\x09:)arr[i]}")
-        #echo "${tmp[1]} ${tmp[2]} ${tmp[3]} ${tmp[4]}"
         if [[ -e ${tmp[4]} ]]; then
             if [[ -d ${tmp[4]} ]]; then
                 echo -e "${tmp[1]} ${tmp[2]} \033[34m${tmp[3]}\033[m"
@@ -112,10 +108,9 @@ gomi::restore()
         #echo "${${(M)res##*[0-9] }// /$del}${res##*[0-9] }"
         #echo ${(M)arr:#${${(M)res##*[0-9] }// /$del}${res##*[0-9] }*}
         #echo ${(pws:\x09:)${(M)arr:#${${(M)res##*[0-9] }// /$del}${res##*[0-9] }*}}
-        tmp=(${(pws:\x09:)${(M)arr:#${${(M)res##*[0-9] }// /$del}${res##*[0-9] }*}})
         if [ "$k" = "ctrl-v" ]; then
             # quicklook view
-            #d="$(awk '{print $4}' <<<${(M)arr:#${${(M)res##*[0-9] }// /$del}${res##*[0-9] }*})"
+            tmp=(${(pws:\x09:)${(M)arr:#${${(M)res##*:[0-9][0-9] }// /$del}${res##*:[0-9][0-9] }*}})
             if [[ -d ${tmp[4]} ]]; then
                 {
                     ls -dl \"${tmp[4]}\"
@@ -126,11 +121,12 @@ gomi::restore()
             fi
         else
             # restore multiple selected files by fzf
-            #res=(${(f)res})
-            #for ((i=1; i<=$#res; i++)); do
-            #    grep "${res[i]}" <<<"${(F)arr}" | awk '{print $4,$3}' | xargs mv -f
-            #done; exit
-            command mv -f "${tmp[4]}" "${1:-${tmp[3]}}"
+            res=(${${(@f)res}##*:[0-9][0-9] })
+            for i in "${res[@]}"
+            do
+                tmp=(${(pws:\x09:)${"$(grep "$i" <<<${(F)arr})"##*:[0-9][0-9]$del}})
+                command mv -f "${tmp[2]}" "${1:-${tmp[1]}}"
+            done
             return $status
         fi
     done
