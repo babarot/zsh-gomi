@@ -130,11 +130,6 @@ gomi::restore()
 
 gomi::delete()
 {
-    if [[ -z $1 ]]; then
-        echo "gomi: too few arguments" >&2
-        return 1
-    fi
-
     local f t ret=0
     for f in "$@"
     do
@@ -186,8 +181,12 @@ HELP
     -s|--system)
         shift; gomi::system "$@"
         ;;
-    -*|--**)
+    -*|--*)
         echo "$1: unknown option" >&2
+        exit 1
+        ;;
+    "")
+        echo "gomi: too few arguments" >&2
         exit 1
         ;;
     *)
