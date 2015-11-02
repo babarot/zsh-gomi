@@ -1,15 +1,11 @@
 #!/bin/zsh
 
-if [[ -z $ZSH_VERSION ]]; then
-    echo "zsh" >&2
-    exit 1
-fi
-
-del=$'\t'
-
 GOMI_DIR=${GOMI_DIR:-~/.gomi}
 GOMI_BOX="$GOMI_DIR/$(date +%Y/%m/%d)"
 GOMI_LOG="$GOMI_DIR/log"
+
+# delimiter
+del=$'\t'
 
 gomi::init()
 {
@@ -98,8 +94,8 @@ gomi::restore()
     local out q k res
     while out=$(
         echo "$list" \
-            | fzf --ansi --multi --no-sort --tac --query="$q" \
-            --print-query --expect=ctrl-v --exit-0); do
+            | fzf --ansi --multi --tac --query="$q" --print-query \
+            --no-sort --expect=ctrl-v --exit-0 --prompt="gomi> "); do
         q="$(head -1 <<< "$out")"
         k="$(head -2 <<< "$out" | tail -1)"
         res="$(sed '1,2d;/^$/d' <<< "$out")"
