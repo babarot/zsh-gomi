@@ -9,17 +9,11 @@ function _gomi() {
     local ret=1
 
     _arguments -C \
-        '(-h --help)'{-h,--help}'[show this help and exit]' \
-        '(-r --restore -s --system)'{-r,--restore}'[restore files from gomi box]' \
-        '(-r --restore -s --system)'{-s,--system}'[use system-trashcan instead gomi-trashcan]' \
-        '(-)*:files:->file' \
+        '(- :)'{-h,--help}'[show this help and exit]' \
+        '(-)'{-r,--restore}'[restore files from gomi box]: :_files' \
+        '(-)'{-s,--system}'[use system-trashcan instead gomi-trashcan]' \
+        '(-)*: :_files' \
         && ret=0
-
-    case $state in
-      file)
-        _files && ret=0
-        ;;
-    esac
 
     return ret
 }

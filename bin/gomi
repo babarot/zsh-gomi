@@ -124,6 +124,7 @@ gomi::restore()
     local out q k res ok
     while ok=("${ok[@]:-dummy_$RANDOM}"); out=$(
         log_list \
+            | perl -pe 's/(\d+-\d+-\d+ \d\d:\d\d:\d\d)/\033[33m$1\033[m/' \
             | fzf --ansi --multi --tac --query="$q" --print-query \
             --no-sort --expect=ctrl-v,ctrl-x,"?" --exit-0 --prompt="gomi> "); do
         q="$(head -1 <<< "$out")"
