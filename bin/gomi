@@ -7,6 +7,34 @@ GOMI_LOG="$GOMI_DIR/log"
 # delimiter
 del=$'\t'
 
+gomi::usage()
+{
+    case "$1" in
+        HELP)
+            cat <<HELP >&2
+usage: gomi [OPTIONS] files...
+  gomi delete files like rm command
+  but unlike rm, files are moved to trash box
+
+options:
+  -h, --help     show this help message
+  -r, --restore  restore discarded files
+  -s, --system   remove files to system trash box
+HELP
+            ;;
+        KEYBIND)
+            cat <<KEYBIND
+keybind:
+  ctrl-v  show the discarded files
+  ctrl-x  remove the selected files from gomi by using rm command
+          safety, being remove really when ctrl-x is pressed twice
+KEYBIND
+            ;;
+    esac
+
+    return 1
+}
+
 gomi::init()
 {
     [[ -d $GOMI_DIR ]] || mkdir -p "$GOMI_DIR"
@@ -97,7 +125,7 @@ gomi::restore()
     while ok=("${ok[@]:-dummy_$RANDOM}"); out=$(
         log_list \
             | fzf --ansi --multi --tac --query="$q" --print-query \
-            --no-sort --expect=ctrl-v,ctrl-x --exit-0 --prompt="gomi> "); do
+            --no-sort --expect=ctrl-v,ctrl-x,"?" --exit-0 --prompt="gomi> "); do
         q="$(head -1 <<< "$out")"
         k="$(head -2 <<< "$out" | tail -1)"
         res="$(sed '1,2d;/^$/d' <<< "$out")"
@@ -107,6 +135,10 @@ gomi::restore()
         #echo ${(M)arr:#${${(M)res##*[0-9] }// /$del}${res##*[0-9] }*}
         #echo ${(pws:\x09:)${(M)arr:#${${(M)res##*[0-9] }// /$del}${res##*[0-9] }*}}
         case "$k" in
+            "?")
+                gomi::usage KEYBIND
+                return $status
+                ;;
             ctrl-v)
                 # quicklook view
                 tmp=(${(pws:\x09:)${(M)arr:#${${(M)res##*:[0-9][0-9] }// /$del}${res##*:[0-9][0-9] }*}})
@@ -187,17 +219,8 @@ fi
 
 case "$1" in
     -h|--help)
-        cat <<HELP >&2
-usage: gomi [OPTIONS] files...
-  gomi delete files like rm command
-  but unlike rm, files are moved to trash box
-
-options:
-  -h, --help     show this help message
-  -r, --restore  restore discarded files
-  -s, --system   remove files to system trash box
-HELP
-        exit 1
+        gomi::usage HELP
+        exit $status
         ;;
     -r|--restore)
         shift; gomi::restore "$@"
