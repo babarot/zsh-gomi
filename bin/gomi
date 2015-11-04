@@ -70,7 +70,8 @@ gomi::restore()
 
     # chached
     local list i tmp
-    list="$(
+    #list="$(
+    log_list() {
     for ((i=1; i<=$#arr; i++)); do
         tmp=("${(pws:\x09:)arr[i]}")
         if [[ -e ${tmp[4]} ]]; then
@@ -83,19 +84,20 @@ gomi::restore()
             fi
         fi
     done
-    )"
+    }
+    #)"
 
-    if [[ -z $list ]]; then
+    if [[ -z $(log_list) ]]; then
         echo "gomi: $GOMI_LOG: Is empty" >&2
         return 1
     fi
 
     # fzf loop
-    local out q k res
-    while out=$(
-        echo "$list" \
+    local out q k res ok
+    while ok=("${ok[@]:-dummy_$RANDOM}"); out=$(
+        log_list \
             | fzf --ansi --multi --tac --query="$q" --print-query \
-            --no-sort --expect=ctrl-v --exit-0 --prompt="gomi> "); do
+            --no-sort --expect=ctrl-v,ctrl-x --exit-0 --prompt="gomi> "); do
         q="$(head -1 <<< "$out")"
         k="$(head -2 <<< "$out" | tail -1)"
         res="$(sed '1,2d;/^$/d' <<< "$out")"
@@ -104,27 +106,44 @@ gomi::restore()
         #echo "${${(M)res##*[0-9] }// /$del}${res##*[0-9] }"
         #echo ${(M)arr:#${${(M)res##*[0-9] }// /$del}${res##*[0-9] }*}
         #echo ${(pws:\x09:)${(M)arr:#${${(M)res##*[0-9] }// /$del}${res##*[0-9] }*}}
-        if [ "$k" = "ctrl-v" ]; then
-            # quicklook view
-            tmp=(${(pws:\x09:)${(M)arr:#${${(M)res##*:[0-9][0-9] }// /$del}${res##*:[0-9][0-9] }*}})
-            if [[ -d ${tmp[4]} ]]; then
-                {
-                    ls -dl \"${tmp[4]}\"
-                    ls -l \"${tmp[4]}\"
-                } | less
-            else
-                LESSOPEN="$lessopen_query" less "${tmp[4]}"
-            fi
-        else
-            # restore multiple selected files by fzf
-            res=(${${(@f)res}##*:[0-9][0-9] })
-            for i in "${res[@]}"
-            do
-                tmp=(${(pws:\x09:)${"$(grep "$i" <<<${(F)arr})"##*:[0-9][0-9]$del}})
-                command mv -f "${tmp[2]}" "${1:-${tmp[1]}}"
-            done
-            return $status
-        fi
+        case "$k" in
+            ctrl-v)
+                # quicklook view
+                tmp=(${(pws:\x09:)${(M)arr:#${${(M)res##*:[0-9][0-9] }// /$del}${res##*:[0-9][0-9] }*}})
+                if [[ -d ${tmp[4]} ]]; then
+                    {
+                        ls -dl \"${tmp[4]}\"
+                        ls -l \"${tmp[4]}\"
+                    } | less
+                else
+                    LESSOPEN="$lessopen_query" less "${tmp[4]}"
+                fi
+                ;;
+            ctrl-x)
+                tmp=("$(
+                    for i in ${(@f)res}
+                    do
+                        echo ${${(M)${arr}:#${i// /$del}*}##*$del}
+                    done
+                )")
+                if [[ ${(j: :)ok} == ${(j: :)${(@f)tmp}} ]]; then
+                    command rm -rf "${(@f)tmp}" 2>/dev/null
+                    ok=()
+                else
+                    ok=("${(@f)tmp}")
+                fi
+                ;;
+            *)
+                # restore multiple selected files by fzf
+                res=(${${(@f)res}##*:[0-9][0-9] })
+                for i in "${res[@]}"
+                do
+                    tmp=(${(pws:\x09:)${"$(grep "$i" <<<${(F)arr})"##*:[0-9][0-9]$del}})
+                    command mv -f "${tmp[2]}" "${1:-${tmp[1]}}"
+                done
+                return $status
+                ;;
+        esac
     done
 }
 
@@ -161,6 +180,11 @@ gomi::logging()
 }
 
 gomi::init
+if [[ -p /dev/stdin ]]; then
+    gomi::delete "${(z)$(<&0)}"
+    exit $status
+fi
+
 case "$1" in
     -h|--help)
         cat <<HELP >&2
