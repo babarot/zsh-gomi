@@ -98,6 +98,5 @@ And about more keybinds see `man fzf`.
 
 [MIT][license] © BABAROT (a.k.a. [b4b4r07](http://tellme.tokyo))
 
-
 [license]: http://b4b4r07.mit-license.org
-[gomi]: https://github.com/zsh-gomi
+[gomi]: https://github.com/b4b4r07/zsh-gomi
