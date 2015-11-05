@@ -5,7 +5,7 @@ GOMI_BOX="$GOMI_DIR/$(date +%Y/%m/%d)"
 GOMI_LOG="$GOMI_DIR/log"
 
 # delimiter
-del=$'\t'
+DELIM=$'\t'
 
 gomi::usage()
 {
@@ -45,7 +45,7 @@ gomi::init()
 gomi::system()
 {
     local -a files
-    local i CWD
+    local i cwd
 
     for i in "$@"
     do
@@ -56,14 +56,14 @@ gomi::system()
         files+=("$i")
     done
 
-    CWD="$(pwd | sed -E -e 's/\\\\/\\\\\\\\/g' -e 's/"/\\\\"/g')"
+    cwd="$(pwd | sed -E -e 's/\\\\/\\\\\\\\/g' -e 's/"/\\\\"/g')"
     osascript - "${files[@]}" <<EOF >/dev/null
     on run argv
         set itemArray to {}
 
         repeat with i in argv
             if first character of i is not "/" then
-                set i to "$CWD" & "/" & i
+                set i to "$cwd" & "/" & i
             end if
             set itemArray to itemArray & (i as POSIX file as Unicode text)
         end repeat
@@ -75,7 +75,7 @@ gomi::system()
 EOF
     for i in "${files[@]}"
     do
-        echo "${i:A}$del$HOME/.Trash/${i:t}"
+        echo "${i:A}$DELIM$HOME/.Trash/${i:t}"
     done | gomi::logging
 }
 
@@ -83,7 +83,6 @@ gomi::restore()
 {
     local -a arr
     arr=(${(@f)"$(<$GOMI_LOG)"})
-    #arr=${(M)${(R)${(@f)"$(<$GOMI_LOG)"}##*[[:blank:]]}:#/*[[:digit:]]}
     if (( $+commands[pygmentize] && $+commands[python] )); then
         local get_styles styles style lessopen_query
         get_styles="from pygments.styles import get_all_styles
@@ -98,7 +97,7 @@ gomi::restore()
 
     # chached
     local list i tmp
-    #list="$(
+
     log_list() {
     for ((i=1; i<=$#arr; i++)); do
         tmp=("${(pws:\x09:)arr[i]}")
@@ -113,8 +112,8 @@ gomi::restore()
         fi
     done
     }
-    #)"
 
+    # check if log_list returns gomi list
     if [[ -z $(log_list) ]]; then
         echo "gomi: $GOMI_LOG: Is empty" >&2
         return 1
@@ -131,18 +130,15 @@ gomi::restore()
         k="$(head -2 <<< "$out" | tail -1)"
         res="$(sed '1,2d;/^$/d' <<< "$out")"
         [ -z "$res" ] && continue
-        #echo "${(M)res##*[0-9] }"
-        #echo "${${(M)res##*[0-9] }// /$del}${res##*[0-9] }"
-        #echo ${(M)arr:#${${(M)res##*[0-9] }// /$del}${res##*[0-9] }*}
-        #echo ${(pws:\x09:)${(M)arr:#${${(M)res##*[0-9] }// /$del}${res##*[0-9] }*}}
         case "$k" in
             "?")
                 gomi::usage KEYBIND
                 return $status
                 ;;
+
             ctrl-v)
                 # quicklook view
-                tmp=(${(pws:\x09:)${(M)arr:#${${(M)res##*:[0-9][0-9] }// /$del}${res##*:[0-9][0-9] }*}})
+                tmp=(${(pws:\x09:)${(M)arr:#${${(M)res##*:[0-9][0-9] }// /$DELIM}${res##*:[0-9][0-9] }*}})
                 if [[ -d ${tmp[4]} ]]; then
                     {
                         ls -dl \"${tmp[4]}\"
@@ -152,11 +148,12 @@ gomi::restore()
                     LESSOPEN="$lessopen_query" less "${tmp[4]}"
                 fi
                 ;;
+
             ctrl-x)
                 tmp=("$(
                     for i in ${(@f)res}
                     do
-                        echo ${${(M)${arr}:#${i// /$del}*}##*$del}
+                        echo ${${(M)${arr}:#${i// /$DELIM}*}##*$DELIM}
                     done
                 )")
                 if [[ ${(j: :)ok} == ${(j: :)${(@f)tmp}} ]]; then
@@ -166,15 +163,50 @@ gomi::restore()
                     ok=("${(@f)tmp}")
                 fi
                 ;;
+
             *)
                 # restore multiple selected files by fzf
-                res=(${${(@f)res}##*:[0-9][0-9] })
+                res=(${(@f)res})
+                local src dest ret=0 c=1 i for_grep
+                # multiple files
                 for i in "${res[@]}"
                 do
-                    tmp=(${(pws:\x09:)${"$(grep "$i" <<<${(F)arr})"##*:[0-9][0-9]$del}})
-                    command mv -f "${tmp[2]}" "${1:-${tmp[1]}}"
+                    # restruct with tab
+                    for_grep="$(perl -pe 's/^(\d+-\d+-\d+) (\d+:\d+:\d+) (\/.+)$/$1\t$2\t$3/' <<<"$i")"
+                    src="$(echo  "${(F)arr}" | grep "^$for_grep\t" | cut -f3- | cut -f2)"
+                    dest="$(echo "${(F)arr}" | grep "^$for_grep\t" | cut -f3- | cut -f1)"
+
+                    # dest
+                    if [[ -n $1 ]]; then
+                        # trim extension
+                        if [[ -d $1 ]]; then
+                            dest="$1/${src:t:r}"
+                        else
+                            dest="$1"
+                        fi
+                    fi
+
+                    # check if dest is available
+                    if [[ -f $dest ]]; then
+                        if (( $#res > 1 )); then
+                            # case of multiple files selected
+                            dest="$dest.$((c++))"
+                            if [[ -f $dest ]]; then
+                                echo "$dest: already exists" >&2
+                                ret=1; continue
+                            fi
+                        else
+                            # single file (under the cursor)
+                            echo "$dest: already exists" >&2
+                            ret=1; continue
+                        fi
+                    fi
+
+                    # put back
+                    command mv -f "$src" "$dest"
                 done
-                return $status
+
+                return $ret
                 ;;
         esac
     done
@@ -183,13 +215,14 @@ gomi::restore()
 gomi::delete()
 {
     local f t ret=0
+
     for f in "$@"
     do
         if [[ -e $f ]]; then
             t="$GOMI_BOX/${f:t}.$(date '+%H_%M_%S')"
             command mv -f "$f" "$t" 2>/dev/null
             if [[ $status -eq 0 ]]; then
-                echo "${f:A}$del$t" | gomi::logging
+                echo "${f:A}$DELIM$t" | gomi::logging
             else
                 echo "$f: could not move to $GOMI_BOX" >&2
                 ret=1
@@ -208,35 +241,44 @@ gomi::logging()
     local line
     while read line
     do
-        [[ -n $line ]] && echo "$(date '+%Y-%m-%d')$del$(date '+%H:%M:%S')$del$line"
+        [[ -n $line ]] && echo "$(date '+%Y-%m-%d')$DELIM$(date '+%H:%M:%S')$DELIM$line"
     done >>"$GOMI_LOG"
 }
 
+# Initialize for gomi
 gomi::init
+
+# Support stdin
 if [[ -p /dev/stdin ]]; then
     gomi::delete "${(z)$(<&0)}"
     exit $status
 fi
 
+# main
 case "$1" in
     -h|--help)
         gomi::usage HELP
         exit $status
         ;;
+
     -r|--restore)
         shift; gomi::restore "$@"
         ;;
+
     -s|--system)
         shift; gomi::system "$@"
         ;;
+
     -*|--*)
         echo "$1: unknown option" >&2
         exit 1
         ;;
+
     "")
         echo "gomi: too few arguments" >&2
         exit 1
         ;;
+
     *)
         gomi::delete "$@"
         ;;
