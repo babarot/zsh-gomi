@@ -95,7 +95,6 @@ gomi::restore()
     fi
     LESS='-R -f -i -P ?f%f:(stdin). ?lb%lb?L/%L.. [?eEOF:?pb%pb\%..]'
 
-    # chached
     local list i tmp
 
     log_list() {
@@ -167,7 +166,7 @@ gomi::restore()
             *)
                 # restore multiple selected files by fzf
                 res=(${(@f)res})
-                local src dest ret=0 c=1 i for_grep
+                local src dest ret=0 c=1 for_grep
                 # multiple files
                 for i in "${res[@]}"
                 do
