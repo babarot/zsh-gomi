@@ -76,11 +76,23 @@ And about more keybinds see `man fzf`.
 
 ## Installation
 
-	$ antigen bundle b4b4r07/zsh-gomi
+### Using [zplug](https://github.com/b4b4r07/zplug)
 
-### Prerequisite
+```zsh
+# Install zsh-gomi(If fzf is already installed)
+zplug "b4b4r07/zsh-gomi", if:"which fzf"
+```
 
-- [fzf](https://github.com/junegunn/fzf)
+zsh-gomi requires [fzf](https://github.com/junegunn/fzf) to work properly. If you don't have fzf in the `$PATH`, you should install fzf with zsh-gomi.
+
+```zsh
+# Install zsh-gomi with fzf
+zplug "junegunn/fzf-bin", \
+    as:command, \
+    file:fzf, \
+    from:gh-r \
+    | zplug "b4b4r07/zsh-gomi", if:"which fzf"
+```
 
 ## V.S.
 
