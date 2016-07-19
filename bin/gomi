@@ -172,8 +172,8 @@ gomi::restore()
                 do
                     # restruct with tab
                     for_grep="$(perl -pe 's/^(\d+-\d+-\d+) (\d+:\d+:\d+) (\/.+)$/$1\t$2\t$3/' <<<"$i")"
-                    src="$(echo  "${(F)arr}" | command grep -P "^$for_grep\t" | cut -f3- | cut -f2)"
-                    dest="$(echo "${(F)arr}" | command grep -P "^$for_grep\t" | cut -f3- | cut -f1)"
+                    src="$(echo  "${(F)arr}" | command grep "^$for_grep$'\t'" | cut -f3- | cut -f2)"
+                    dest="$(echo "${(F)arr}" | command grep "^$for_grep$'\t'" | cut -f3- | cut -f1)"
 
                     # dest
                     if [[ -n $1 ]]; then
