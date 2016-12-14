@@ -89,9 +89,14 @@ zsh-gomi requires [fzf](https://github.com/junegunn/fzf) to work properly. If yo
 # Install zsh-gomi with fzf
 zplug "junegunn/fzf-bin", \
     as:command, \
-    file:fzf, \
-    from:gh-r \
-    | zplug "b4b4r07/zsh-gomi", if:"which fzf"
+    from:gh-r, \
+    rename-to:"fzf", \
+    frozen:1
+
+zplug "b4b4r07/zsh-gomi", \
+    as:command, \
+    use:bin/gomi, \
+    on:junegunn/fzf-bin
 ```
 
 ## V.S.
